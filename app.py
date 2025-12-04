@@ -171,7 +171,7 @@ class Endereco(db.Model):
 tecnico_servico = db.Table('tecnico_servico', db.Column('tecnico_id', db.Integer, db.ForeignKey('tecnico.id')), db.Column('servico_id', db.Integer, db.ForeignKey('servico.id')))
 
 class Tecnico(db.Model):
-    id = db.column(db.Integer, primary_key = True)
+    id = db.Column(db.Integer, primary_key = True)
     nome = db.Column(db.String(100))
 
     servicos = db.relationship('Servico', secondary = tecnico_servico, backref = 'tecnicos')
