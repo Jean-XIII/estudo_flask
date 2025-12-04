@@ -1,18 +1,35 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
+from flask_jwt_extended import JWTManager
 
 app = Flask(__name__)
 
+bcrypt = Bcrypt(app)
+jwt = JWTManager(app)
+
+app.config['JWT_SECRET_KEY'] = 'chave-super-secreta'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///meubanco.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
+class Usuario(db.Model):
+    id = db.Column(db.Integer, primary_key = True)
+    email = db.Column(db.String(120), unique = True, nullable=False)
+    senha_hash = db.Column(db.String(120), nullable = False)
+    
+    def set_senha(self, senha_clara):
+        self.senha_hash = bcrypt.generate_password_hash(senha_clara).decode('utf-8')
+    
+    def validar_senha(self, senha_clara):
+        return bcrypt.check_password_hash(self.senha_hash, senha_clara)
+
 class Cliente(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     nome = db.Column(db.String(100), nullable = False)
 
-    servicos = db.relationship('Servico', backref= 'cliente', lazy = True)
+    servicos = db.relationship('Servico', backref = 'cliente')
 
 @app.route('/clientes', methods = ['POST'])
 def criar_clientes():
@@ -50,6 +67,17 @@ def listar_servicos_cliente(id):
                           'descricao': servico.descricao})
     
     return jsonify(lista_servicos)
+
+@app.route('/clientes/<int:id>', methods = ['GET'])
+def cliente_especifico(id):
+    cliente = Cliente.query.get(id)
+
+    if not cliente:
+        return jsonify({'erro': 'cliente não encontrado'}),404
+    
+    lista_servicos = []
+    
+    return jsonify({'id': cliente.id, 'nome': cliente.nome})
 
 @app.route('/clientes/<int:id>', methods = ['PUT'])
 def atualizar_cliente(id):
