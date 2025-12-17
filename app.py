@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from functools import wraps
 
 app = Flask(__name__)
 bcrypt = Bcrypt(app)
@@ -35,6 +36,31 @@ class Usuario(db.Model):
 
     def validar_senha(self, senha_clara):
         return bcrypt.check_password_hash(self.senha_hash, senha_clara)
+
+def somente_dono(model):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(id, *args, **kwargs):
+            usuario_id = get_jwt_identity()
+
+            recurso = model.query.get(id)
+            if not recurso:
+                return jsonify({'erro': 'recurso não encontrado'}), 404
+            
+            if recurso.usuario_id != usuario_id:
+                return jsonify({'erro': 'acesso negado'}), 403
+            
+            return func(id, *args, **kwargs)
+        return wrapper
+    return decorator
+
+def verificar_dono_recurso(dono_id):
+    usuario_id = get_jwt_identity()
+
+    if dono_id != usuario_id:
+        return False
+    
+    return True
 
 @app.route('/register', methods=['POST'])
 def registrar_usuario():
@@ -194,15 +220,9 @@ def servico_especifico(id):
 
 @app.route('/servicos/<int:id>', methods = ['PUT'])
 @jwt_required()
+@somente_dono(Servico)
 def atualizar_servico(id):
-    usuario_id = get_jwt_identity()
     servico = Servico.query.get(id)
-
-    if not servico:
-        return jsonify({'erro': 'serviço não encontrado'}), 404
-    
-    if servico.usuario_id != usuario_id:
-        return jsonify({'erro': 'acesso negado'}), 403
     
     dados = request.json
     titulo = dados['titulo']
