@@ -5,18 +5,21 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 from functools import wraps
 
 app = Flask(__name__)
-bcrypt = Bcrypt(app)
-jwt = JWTManager(app)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///meubanco.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = 'chave-super-secreta'
+
+bcrypt = Bcrypt(app)
+jwt = JWTManager(app)
 
 db = SQLAlchemy(app)
 
 class Cliente(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     nome = db.Column(db.String(100), nullable = False)
+    usuario_id = db.Column(db.Integer, nullable= False)
+
     servicos = db.relationship('Servico', backref='cliente')
 
 class Servico(db.Model):
@@ -37,11 +40,12 @@ class Usuario(db.Model):
     def validar_senha(self, senha_clara):
         return bcrypt.check_password_hash(self.senha_hash, senha_clara)
 
+#DECORATOR
 def somente_dono(model):
     def decorator(func):
         @wraps(func)
         def wrapper(id, *args, **kwargs):
-            usuario_id = get_jwt_identity()
+            usuario_id = int(get_jwt_identity())
 
             recurso = model.query.get(id)
             if not recurso:
@@ -50,17 +54,10 @@ def somente_dono(model):
             if recurso.usuario_id != usuario_id:
                 return jsonify({'erro': 'acesso negado'}), 403
             
-            return func(id, *args, **kwargs)
+            return func(recurso, *args, **kwargs)
         return wrapper
     return decorator
 
-def verificar_dono_recurso(dono_id):
-    usuario_id = get_jwt_identity()
-
-    if dono_id != usuario_id:
-        return False
-    
-    return True
 
 @app.route('/register', methods=['POST'])
 def registrar_usuario():
@@ -89,7 +86,7 @@ def login():
     if not usuario or not usuario.validar_senha(senha):
         return jsonify({'erro': 'credenciais inválidas'}), 401
     
-    token = create_access_token(identity = usuario.id)
+    token = create_access_token(identity= str(usuario.id))
 
     return jsonify({'token': token})
 
@@ -97,18 +94,22 @@ def login():
 @app.route('/clientes', methods = ['POST'])
 @jwt_required()
 def criar_cliente():
+    usuario_id = int(get_jwt_identity())
+
     dados = request.json
     nome = dados['nome']
 
-    cliente = Cliente(nome=nome)
+    cliente = Cliente(nome=nome, usuario_id=usuario_id)
     db.session.add(cliente)
     db.session.commit()
 
     return jsonify({'id': cliente.id, 'nome': cliente.nome})
 
 @app.route('/clientes', methods = ['GET'])
+@jwt_required()
 def listar_clientes():
-    clientes = Cliente.query.all()
+    usuario_id = int(get_jwt_identity())
+    clientes = Cliente.query.filter_by(usuario_id= usuario_id).all()
 
     lista_clientes = []
 
@@ -118,21 +119,16 @@ def listar_clientes():
     return jsonify(lista_clientes)
 
 @app.route('/clientes/<int:id>', methods = ['GET'])
-def cliente_especifico(id):
-    cliente = Cliente.query.get(id)
-
-    if not cliente:
-        return jsonify({'erro': 'cliente não encontrado'}), 404
+@jwt_required()
+@somente_dono(Cliente)
+def cliente_especifico(cliente):
     
     return jsonify({'id': cliente.id, 'nome': cliente.nome})
 
 @app.route('/clientes/<int:id>/servicos', methods = ['GET'])
-def servicos_por_cliente(id):
-    cliente = Cliente.query.get(id)
-
-    if not cliente:
-        return jsonify({'erro': 'cliente não encontrado'})
-    
+@jwt_required()
+@somente_dono(Cliente)
+def servicos_por_cliente(cliente):
     lista_servicos_cliente = []
     for servico in cliente.servicos:
         lista_servicos_cliente.append({'id': servico.id,
@@ -142,12 +138,8 @@ def servicos_por_cliente(id):
 
 @app.route('/clientes/<int:id>', methods = ['PUT'])
 @jwt_required()
-def atualizar_cliente(id):
-    cliente = Cliente.query.get(id)
-
-    if not cliente:
-        return jsonify({'erro': 'cliente não encontrado'}), 404
-    
+@somente_dono(Cliente)
+def atualizar_cliente(cliente):
     dados = request.json
     nome = dados['nome']
 
@@ -158,12 +150,8 @@ def atualizar_cliente(id):
 
 @app.route('/clientes/<int:id>', methods = ['DELETE'])
 @jwt_required()
-def deletar_cliente(id):
-    cliente = Cliente.query.get(id)
-
-    if not cliente:
-        return jsonify({'erro': 'cliente não encontrado'}), 404
-    
+@somente_dono(Cliente)
+def deletar_cliente(cliente):
     db.session.delete(cliente)
     db.session.commit()
 
@@ -172,7 +160,7 @@ def deletar_cliente(id):
 @app.route('/servicos', methods = ['POST'])
 @jwt_required()
 def criar_servico():
-    usuario_id = get_jwt_identity()
+    usuario_id = int(get_jwt_identity())
     dados = request.json
     titulo = dados['titulo']
     descricao = dados.get('descricao')
@@ -182,6 +170,9 @@ def criar_servico():
 
     if not cliente:
         return jsonify({'erro': 'cliente não encontrado'}), 404
+    
+    if cliente.usuario_id != usuario_id:
+        return jsonify({'erro': 'cliente não pertence ao usuário'}), 403
 
     servico = Servico(titulo=titulo, descricao=descricao, cliente_id=cliente_id, usuario_id=usuario_id)
     db.session.add(servico)
@@ -194,8 +185,10 @@ def criar_servico():
                     'criado_por': servico.usuario_id})
 
 @app.route('/servicos', methods = ['GET'])
+@jwt_required()
 def listar_servicos():
-    servicos = Servico.query.all()
+    usuario_id=int(get_jwt_identity())
+    servicos = Servico.query.filter_by(usuario_id=usuario_id).all()
 
     lista_servicos = []
 
@@ -208,11 +201,9 @@ def listar_servicos():
     return jsonify(lista_servicos)
 
 @app.route('/servicos/<int:id>', methods = ['GET'])
-def servico_especifico(id):
-    servico = Servico.query.get(id)
-
-    if not servico:
-        return jsonify({'erro': 'serviço não encontrado'}), 404
+@jwt_required()
+@somente_dono(Servico)
+def servico_especifico(servico):
     
     return jsonify({'id': servico.id,
                     'titulo': servico.titulo,
@@ -221,9 +212,7 @@ def servico_especifico(id):
 @app.route('/servicos/<int:id>', methods = ['PUT'])
 @jwt_required()
 @somente_dono(Servico)
-def atualizar_servico(id):
-    servico = Servico.query.get(id)
-    
+def atualizar_servico(servico):
     dados = request.json
     titulo = dados['titulo']
     descricao = dados['descricao']
@@ -238,16 +227,8 @@ def atualizar_servico(id):
 
 @app.route('/servicos/<int:id>', methods = ['DELETE'])
 @jwt_required()
-def deletar_servico(id):
-    usuario_id = get_jwt_identity()
-    servico = Servico.query.get(id)
-
-    if not servico:
-        return jsonify({'erro': 'serviço não encontrado'}), 404
-    
-    if servico.usuario_id != usuario_id:
-        return jsonify({'erro': 'acesso negado'})
-    
+@somente_dono(Servico)
+def deletar_servico(servico):
     db.session.delete(servico)
     db.session.commit()
 
