@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
 from functools import wraps
 
 app = Flask(__name__)
@@ -33,6 +33,7 @@ class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     email = db.Column(db.String(120), unique = True, nullable = False)
     senha_hash = db.Column(db.String(200), nullable = False)
+    role = db.Column(db.String(20), default='user')
 
     def set_senha(self, senha_clara):
         self.senha_hash = bcrypt.generate_password_hash(senha_clara).decode('utf-8')
@@ -40,7 +41,6 @@ class Usuario(db.Model):
     def validar_senha(self, senha_clara):
         return bcrypt.check_password_hash(self.senha_hash, senha_clara)
 
-#DECORATOR
 def somente_dono(model):
     def decorator(func):
         @wraps(func)
@@ -58,6 +58,23 @@ def somente_dono(model):
         return wrapper
     return decorator
 
+def role_required(role_esperado):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            claims = get_jwt()
+            if claims.get('role') != role_esperado:
+                return jsonify({'erro': 'acesso restrito'}), 403
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+@app.route('/admin/clientes', methods=['GET'])
+@jwt_required()
+@role_required('admin')
+def listar_todos_clientes():
+    clientes = Cliente.query.all()
+    return jsonify([{'id': c.id, 'nome': c.nome} for c in clientes])
 
 @app.route('/register', methods=['POST'])
 def registrar_usuario():
@@ -86,7 +103,7 @@ def login():
     if not usuario or not usuario.validar_senha(senha):
         return jsonify({'erro': 'credenciais inválidas'}), 401
     
-    token = create_access_token(identity= str(usuario.id))
+    token = create_access_token(identity= str(usuario.id), additional_claims = {'role': usuario.role})
 
     return jsonify({'token': token})
 
