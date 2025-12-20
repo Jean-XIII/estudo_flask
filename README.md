@@ -1,6 +1,6 @@
 # Estudo do framework Flask para criação de APIs REST backend.
 
-## Ferramentas utilizadas:
+## Ferramentas utilizadas relacionadas ao Flask:
 ### Flask (framework web)
 [Documentação oficial do Flask](https://flask.palletsprojects.com/en/latest/) — base de TODAS as rotas, request, response.
 
