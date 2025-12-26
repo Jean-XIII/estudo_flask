@@ -12,10 +12,13 @@ class Cliente(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     nome = db.Column(db.String(100), nullable = False)
 
+    servicos = db.relationship('Servico', backref = 'cliente')
+
 class Servico(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     titulo = db.Column(db.String(100), nullable = False)
     descricao = db.Column(db.String(200), nullable = True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable = False)
 
 @app.route('/clientes', methods = ['POST'])
 def criar_cliente():
