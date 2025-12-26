@@ -12,13 +12,10 @@ class Cliente(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     nome = db.Column(db.String(100), nullable = False)
 
-    servicos = db.relationship('Servico', backref = 'cliente')
-
 class Servico(db.Model):
     id = db.Column(db.Integer, primary_key = True)
     titulo = db.Column(db.String(100), nullable = False)
     descricao = db.Column(db.String(200), nullable = True)
-    cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable = False)
 
 @app.route('/clientes', methods = ['POST'])
 def criar_cliente():
@@ -50,20 +47,6 @@ def listar_cliente_especifico(id):
         return jsonify({'erro': 'cliente não encontrado'}), 404
     
     return jsonify({'id': cliente.id, 'nome': cliente.nome})
-
-@app.route('/cliente/<int:id>/servicos', methods =['GET'])
-def listar_servicos_cliente(id):
-    cliente = Cliente.query.get(id)
-
-    if not cliente:
-        return jsonify({'erro': 'cliente não encontrado'}), 404
-    
-    servicos_cliente = []
-    for servico in cliente.servicos:
-        servicos_cliente.append({'id':servico.id,
-                                 'titulo': servico.titulo,
-                                 'descricao': servico.descricao})
-    return jsonify(servicos_cliente)
 
 @app.route('/clientes/<int:id>', methods = ['PUT'])
 def atualizar_cliente(id):
@@ -97,22 +80,15 @@ def criar_servico():
     dados = request.json
     titulo = dados['titulo']
     descricao = dados.get('descricao')
-    cliente_id = dados['cliente_id']
-
-    cliente = Cliente.query.get(cliente_id)
-    if not cliente:
-        return jsonify({'erro': 'cliente não encontrado'}), 404
 
     servico = Servico(titulo=titulo,
-                      descricao = descricao,
-                      cliente_id = cliente_id)
+                      descricao = descricao)
     db.session.add(servico)
     db.session.commit()
 
     return jsonify({'id': servico.id,
                     'titulo': servico.titulo,
-                    'descricao': servico.descricao,
-                    'cliente_id': servico.cliente_id})
+                    'descricao': servico.descricao})
 
 @app.route('/servicos', methods = ['GET'])
 def listar_servicos():
@@ -123,9 +99,7 @@ def listar_servicos():
     for servico in servicos:
         lista_servicos.append({'id': servico.id,
                                'titulo': servico.titulo,
-                               'descricao': servico.descricao,
-                               'cliente_id': servico.clieente_id,
-                               'cliente_nome': servico.cliente.nome})
+                               'descricao': servico.descricao})
     return jsonify(lista_servicos)
 
 @app.route('/servicos/<int:id>', methods = ['GET'])
