@@ -51,6 +51,20 @@ def listar_cliente_especifico(id):
     
     return jsonify({'id': cliente.id, 'nome': cliente.nome})
 
+@app.route('/clientes/<int:id>/servicos', methods = ['GET'])
+def listar_servicos_cliente(id):
+    cliente = Cliente.query.get(id)
+
+    if not cliente:
+        return jsonify({'erro': 'cliente não encontrado'}), 404
+    
+    lista_servicos = []
+    for servico in cliente.servicos:
+        lista_servicos.append({'id': servico.id,
+                               'titulo': servico.titulo,
+                               'descricao': servico.descricao})
+    return jsonify(lista_servicos)
+
 @app.route('/clientes/<int:id>', methods = ['PUT'])
 def atualizar_cliente(id):
     cliente = Cliente.query.get(id)
@@ -83,15 +97,23 @@ def criar_servico():
     dados = request.json
     titulo = dados['titulo']
     descricao = dados.get('descricao')
+    cliente_id = dados['cliente_id']
+
+    cliente = Cliente.query.get(cliente_id)
+    if not cliente:
+        return jsonify({'erro': 'cliente não encontrado'}), 404
 
     servico = Servico(titulo=titulo,
-                      descricao = descricao)
+                      descricao = descricao,
+                      cliente_id = cliente_id)
+    
     db.session.add(servico)
     db.session.commit()
 
     return jsonify({'id': servico.id,
                     'titulo': servico.titulo,
-                    'descricao': servico.descricao})
+                    'descricao': servico.descricao,
+                    'cliente_id': servico.cliente_id})
 
 @app.route('/servicos', methods = ['GET'])
 def listar_servicos():
@@ -114,7 +136,9 @@ def listar_servico_especifico(id):
     
     return jsonify({'id': servico.id,
                     'titulo': servico.titulo,
-                    'descricao': servico.descricao})
+                    'descricao': servico.descricao,
+                    'cliente_id' : servico.cliente_id,
+                    'cliente_nome': servico.cliente.nome})
 
 @app.route('/servicos/<int:id>', methods = ['PUT'])
 def atualizar_servico(id):
