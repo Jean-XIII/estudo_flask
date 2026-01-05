@@ -116,4 +116,4 @@ Authorization: Bearer <token>
 * DELETE /servicos/<id>
 * GET /admin/clientes (acesso restrito a usuários admin)
 ## Observações finais
-Este projeto foi desenvolvido exclusivamente para fins de estudo e prática, com foco em aprendizado de conceitos de back-end e organização de aplicações Flask.
+Este projeto está sendo desenvolvido exclusivamente para fins de estudo e prática, com foco em aprendizado de conceitos de back-end e organização de aplicações Flask.
