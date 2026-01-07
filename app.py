@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
-from flask_jwt_extended import JWTManager
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 
 app = Flask(__name__)
 
@@ -12,6 +12,17 @@ app.config['JWT_SECRET_KEY'] = 'chave-secreta'
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
+
+class Usuario(db.Model):
+    id = db.Column(db.Integer, primary_key = True)
+    email = db.Column(db.String(120), unique = True, nullable = False)
+    senha_hash = db.Column(db.String(200), nullable = False)
+
+    def set_senha(self, senha_clara):
+        self.senha_hash = bcrypt.generate_password_hash(senha_clara).decode('utf-8')
+    
+    def validar_senha(self, senha_clara):
+        return bcrypt.check_password_hash(self.senha_hash, senha_clara)
 
 class Cliente(db.Model):
     id = db.Column(db.Integer, primary_key = True)
@@ -24,6 +35,38 @@ class Servico(db.Model):
     titulo = db.Column(db.String(100), nullable = False)
     descricao = db.Column(db.String(200), nullable = True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable = False)
+
+@app.route('/register', methods = ['POST'])
+def registrar_usuario():
+    dados = request.json
+    email = dados['email']
+    senha = dados['senha']
+    
+    if Usuario.query.filter_by(email=email).first():
+        return jsonify({'erro': 'email já cadastrado'}), 409
+
+    usuario = Usuario(email=email)
+    usuario.set_senha(senha)
+
+    db.session.add(usuario)
+    db.session.commit()
+
+    return jsonify({'mensagem': 'usuário registrado com sucesso'})
+
+app.route('/login', methods = ['POST'])
+def login():
+    dados = request.json()
+    email = dados['email']
+    senha = dados['senha']
+
+    usuario = Usuario.query.filter_by(email=email).first()
+
+    if not usuario or not usuario.validar_senha(senha):
+        return jsonify({'erro': 'credenciais inválidas'}), 401
+    
+    token = create_access_token(identity = usuario.id)
+
+    return jsonify({'token': token})
 
 @app.route('/clientes', methods = ['POST'])
 def criar_cliente():
@@ -98,7 +141,9 @@ def deletar_cliente(id):
     return jsonify({'mensagem': 'cliente deltado com sucesso!'})
 
 @app.route('/servicos', methods = ['POST'])
+@jwt_required()
 def criar_servico():
+    usuario_id = get_jwt_identity
     dados = request.json
     titulo = dados['titulo']
     descricao = dados.get('descricao')
