@@ -35,6 +35,7 @@ class Servico(db.Model):
     titulo = db.Column(db.String(100), nullable = False)
     descricao = db.Column(db.String(200), nullable = True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable = False)
+    usuario_id = db.Column(db.Integer, nullable=False)
 
 @app.route('/register', methods = ['POST'])
 def registrar_usuario():
@@ -69,6 +70,7 @@ def login():
     return jsonify({'token': token})
 
 @app.route('/clientes', methods = ['POST'])
+@jwt_required()
 def criar_cliente():
     dados = request.json
     nome = dados['nome']
@@ -114,6 +116,7 @@ def listar_servicos_cliente(id):
     return jsonify(lista_servicos)
 
 @app.route('/clientes/<int:id>', methods = ['PUT'])
+@jwt_required()
 def atualizar_cliente(id):
     cliente = Cliente.query.get(id)
 
@@ -129,6 +132,7 @@ def atualizar_cliente(id):
     return jsonify({'id': cliente.id, 'nome': cliente.nome})
 
 @app.route('/clientes/<int:id>', methods = ['DELETE'])
+@jwt_required()
 def deletar_cliente(id):
     cliente = Cliente.query.get(id)
 
@@ -155,7 +159,8 @@ def criar_servico():
 
     servico = Servico(titulo=titulo,
                       descricao = descricao,
-                      cliente_id = cliente_id)
+                      cliente_id = cliente_id,
+                      usuario_id = usuario_id)
     
     db.session.add(servico)
     db.session.commit()
@@ -163,7 +168,8 @@ def criar_servico():
     return jsonify({'id': servico.id,
                     'titulo': servico.titulo,
                     'descricao': servico.descricao,
-                    'cliente_id': servico.cliente_id})
+                    'cliente_id': servico.cliente_id,
+                    'criado_por': servico.usuario_id})
 
 @app.route('/servicos', methods = ['GET'])
 def listar_servicos():
@@ -191,6 +197,7 @@ def listar_servico_especifico(id):
                     'cliente_nome': servico.cliente.nome})
 
 @app.route('/servicos/<int:id>', methods = ['PUT'])
+@jwt_required()
 def atualizar_servico(id):
     servico = Servico.query.get(id)
 
@@ -207,6 +214,7 @@ def atualizar_servico(id):
                     'descricao': servico.descricao})
 
 @app.route('/servicos/<int:id>', methods = ['DELETE'])
+@jwt_required()
 def deletar_servico(id):
     servico = Servico.query.get(id)
 
