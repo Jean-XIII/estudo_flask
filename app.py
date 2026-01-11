@@ -37,6 +37,14 @@ class Servico(db.Model):
     cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable = False)
     usuario_id = db.Column(db.Integer, nullable=False)
 
+def verificar_dono_recurso(dono_id):
+    usuario_id = get_jwt_identity()
+
+    if dono_id != usuario_id:
+        return False
+    
+    return True
+
 @app.route('/register', methods = ['POST'])
 def registrar_usuario():
     dados = request.json
@@ -204,6 +212,9 @@ def atualizar_servico(id):
     if not servico:
         return jsonify({'erro': 'serviço não encontrado'}), 404
     
+    if not verificar_dono_recurso(servico.usuario_id):
+        return jsonify({'erro': 'acesso negado'}),403
+    
     dados = request.json
     servico.titulo = dados['titulo']
     servico.descricao = dados['descricao']
@@ -220,6 +231,9 @@ def deletar_servico(id):
 
     if not servico:
         return jsonify({'erro': 'serviço não encontrado'}), 404
+    
+    if not verificar_dono_recurso(servico.usuario_id):
+        return jsonify({'erro': 'acesso negado'}), 403
     
     db.session.delete(servico)
     db.session.commit()
